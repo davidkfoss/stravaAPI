@@ -1,24 +1,15 @@
 import express from 'express';
 import axios from 'axios';
 import cors from 'cors';
-import pgPromise from 'pg-promise';
 import dotenv from 'dotenv';
+
 
 dotenv.config();
 
-// Initialize express
 const app = express();
 app.use(cors());
 
-// Initialize database
-const pgp = pgPromise({});
-const db = pgp({
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT),
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD
-});
+let access_token = "oi"
 
 // Define constants
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -45,11 +36,7 @@ app.get('/exchange_token', async (req, res) => {
         });
 
         const tokenData = response.data;
-
-        await db.none('INSERT INTO tokens(access_token, refresh_token, expires_at) VALUES($1, $2, $3)', 
-            [tokenData.access_token, tokenData.refresh_token, tokenData.expires_at]);
-
-        res.send('Token received and saved');
+        res.redirect(`http://localhost:5173/stats/?access_token=${tokenData.access_token}`);
     } catch (error) {
         console.error('Error exchanging token:', error);
         res.status(500).send('Error exchanging token');
@@ -58,27 +45,7 @@ app.get('/exchange_token', async (req, res) => {
 
 app.get('/workout_data', async (req, res) => {
     try {
-        const tokenData = await db.one('SELECT * FROM tokens ORDER BY id DESC LIMIT 1');
-        const currentTime = Math.floor(Date.now() / 1000);
-
-        let accessToken = tokenData.access_token;
-        if (currentTime >= tokenData.expires_at) {
-            const response = await axios.post('https://www.strava.com/oauth/token', null, {
-                params: {
-                    client_id: CLIENT_ID,
-                    client_secret: CLIENT_SECRET,
-                    refresh_token: tokenData.refresh_token,
-                    grant_type: 'refresh_token'
-                }
-            });
-
-            const newTokenData = response.data;
-
-            accessToken = newTokenData.access_token;
-
-            await db.none('INSERT INTO tokens(access_token, refresh_token, expires_at) VALUES($1, $2, $3)', 
-                [newTokenData.access_token, newTokenData.refresh_token, newTokenData.expires_at]);
-        }
+        const accessToken = req.query.access_token;
 
         const response = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
             headers: {
@@ -88,11 +55,101 @@ app.get('/workout_data', async (req, res) => {
 
         const workouts = response.data;
         res.send(workouts);
+        console.log(workouts);
     } catch (error) {
         console.error('Error fetching workout data:', error);
         res.status(500).send('Error fetching workout data');
     }
 });
+
+app.get('/athlete', async (req, res) => {
+    try {
+        const accessToken = req.query.access_token;
+        const response = await axios.get('https://www.strava.com/api/v3/athlete', {
+            headers: {
+                Authorization: `Bearer ${accessToken}`
+            }
+        });
+        const athlete = response.data;
+        res.send(athlete);
+    }
+    catch (error) {
+        console.error('Error fetching athlete data:', error);
+        res.status(500).send('Error fetching athlete data');
+    }
+});
+
+app.get('/zones', async (req, res) => {
+    try {
+        const accessToken = req.query.access_token;
+        const response = await axios.get('https://www.strava.com/api/v3/athlete/zones', {
+            headers: {
+                Authorization: `Bearer ${accessToken}`
+            }
+        });
+        const zones = response.data;
+        res.send(zones);
+    }
+    catch (error) {
+        console.error('Error fetching athlete data:', error);
+        res.status(500).send('Error fetching athlete data');
+    }
+});
+
+app.get('/stats', async (req, res) => {
+    try {
+        const accessToken = req.query.access_token;
+        const id = req.query.id;
+        const response = await axios.get(`https://www.strava.com/api/v3/athlete/${id}/stats`, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`
+            }
+        });
+        const stats = response.data;
+        res.send(stats);
+    }
+    catch (error) {
+        console.error('Error fetching athlete data:', error);
+        res.status(500).send('Error fetching athlete data');
+    }
+});
+
+app.get('/comments', async (req, res) => {
+    try {
+        const accessToken = req.query.access_token;
+        const id = req.query.id;
+        const response = await axios.get(`https://www.strava.com/api/v3/activities/${id}/comments`, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`
+            }
+        });
+        const stats = response.data;
+        res.send(stats);
+    }
+    catch (error) {
+        console.error('Error fetching athlete data:', error);
+        res.status(500).send('Error fetching athlete data');
+    }
+});
+
+app.get('/kudos', async (req, res) => {
+    try {
+        const accessToken = req.query.access_token;
+        const id = req.query.id;
+        const response = await axios.get(`https://www.strava.com/api/v3/activities/${id}/kudos`, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`
+            }
+        });
+        const stats = response.data;
+        res.send(stats);
+    }
+    catch (error) {
+        console.error('Error fetching athlete data:', error);
+        res.status(500).send('Error fetching athlete data');
+    }
+});
+
 
 // Start server
 app.listen(3000, () => {
